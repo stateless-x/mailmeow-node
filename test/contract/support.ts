@@ -86,7 +86,13 @@ export async function receiver(): Promise<{ url: string; received: Received[]; c
   return {
     url: `http://127.0.0.1:${port}/hook`,
     received,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    // mailmeow's webhook sender keeps connections open for reuse; close() alone
+    // waits for those idle sockets, so drop them first.
+    close: () =>
+      new Promise((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections();
+      }),
   };
 }
 
