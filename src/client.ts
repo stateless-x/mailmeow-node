@@ -34,6 +34,38 @@ function toWire(payload: object): Record<string, unknown> {
   return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined).map(([k, v]) => [camelToSnake(k), v]));
 }
 
+/** Bytes as standard base64, without Node's Buffer, so the client runs on edge runtimes too. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000; // String.fromCharCode takes a bounded number of arguments
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+
+/**
+ * The bytes of an attachment's `content`. `instanceof ArrayBuffer` is false for a buffer made in another realm (vm,
+ * an iframe, some test runners), so use `ArrayBuffer.isView` and fall back to the constructor, which accept both.
+ * A view is read through its own offset and length: a Buffer slice shares a bigger ArrayBuffer.
+ */
+function contentBytes(content: Uint8Array | ArrayBuffer): Uint8Array {
+  return ArrayBuffer.isView(content) ? new Uint8Array(content.buffer, content.byteOffset, content.byteLength) : new Uint8Array(content);
+}
+
+/** The send body: Resend's wire shape, with attachment bytes as base64 (JSON would turn a Buffer into `{type, data}`). */
+function sendBody(payload: SendEmailOptions): Record<string, unknown> {
+  const { attachments, ...rest } = payload;
+  const body = toWire(rest);
+  if (attachments !== undefined) {
+    body.attachments = attachments.map((a) =>
+      toWire({
+        ...a,
+        content: typeof a.content === 'string' ? a.content : bytesToBase64(contentBytes(a.content)),
+      }),
+    );
+  }
+  return body;
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function retryDelay(attempt: number, retryAfter: string | null): number {
@@ -122,7 +154,7 @@ class Emails {
 
   /** `200` means accepted and queued, not delivered. Every call gets an idempotency key unless you pass one. */
   send(payload: SendEmailOptions, options: RequestOptions = {}): Promise<Response<{ id: string }>> {
-    return this.client.request('POST', '/emails', toWire(payload), {
+    return this.client.request('POST', '/emails', sendBody(payload), {
       'Idempotency-Key': options.idempotencyKey ?? randomKey(),
     });
   }

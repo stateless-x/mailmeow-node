@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import { MailMeow } from '../../src';
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -51,6 +52,46 @@ describe('send', () => {
     expect(url).toBe('http://api.test/emails');
     expect(JSON.parse(init.body as string)).toEqual({ from: 'a@b.co', to: 'c@d.co', subject: 's', text: 't', reply_to: 'r@d.co' });
   });
+  it('sends attachment bytes as base64 with snake_case fields, and strings as given', async () => {
+    const { fetchMock, meow } = setup(json(200, { id: 'e1' }));
+    const bytes = new Uint8Array([0, 255, 10, 13, 37]);
+    await meow.emails.send({
+      ...payload,
+      attachments: [
+        { filename: 'a.bin', content: Buffer.from(bytes) },
+        { filename: 'b.bin', content: bytes.buffer },
+        { filename: 'logo.png', content: 'aGk=', contentType: 'image/png', contentId: 'logo' },
+      ],
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const b64 = Buffer.from(bytes).toString('base64');
+    expect(JSON.parse(init.body as string).attachments).toEqual([
+      { filename: 'a.bin', content: b64 },
+      { filename: 'b.bin', content: b64 },
+      { filename: 'logo.png', content: 'aGk=', content_type: 'image/png', content_id: 'logo' },
+    ]);
+  });
+
+  it('reads an ArrayBuffer from another realm and a Buffer slice with a byte offset', async () => {
+    const { fetchMock, meow } = setup(json(200, { id: 'e1' }));
+    const foreign = runInNewContext('new ArrayBuffer(3)') as ArrayBuffer;
+    expect(foreign instanceof ArrayBuffer).toBe(false); // the case `instanceof` got wrong
+    new Uint8Array(foreign).set([1, 2, 3]);
+    const slice = Buffer.from([9, 9, 4, 5, 6, 9]).subarray(2, 5); // shares a bigger ArrayBuffer, byteOffset is not 0
+    await meow.emails.send({
+      ...payload,
+      attachments: [
+        { filename: 'a.bin', content: foreign },
+        { filename: 'b.bin', content: slice },
+      ],
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string).attachments).toEqual([
+      { filename: 'a.bin', content: Buffer.from([1, 2, 3]).toString('base64') },
+      { filename: 'b.bin', content: Buffer.from([4, 5, 6]).toString('base64') },
+    ]);
+  });
+
   it('adds an Idempotency-Key when none is given, and uses the caller key when given', async () => {
     const { fetchMock, meow } = setup(json(200, { id: 'a' }), json(200, { id: 'b' }), json(200, { id: 'c' }));
     await meow.emails.send(payload);
@@ -62,11 +103,11 @@ describe('send', () => {
     expect(keys[2]).toBe('mine');
   });
   it('returns API errors instead of throwing', async () => {
-    const e = { statusCode: 422, name: 'validation_error', message: 'The `attachments` field is not supported yet.' };
+    const e = { statusCode: 422, name: 'validation_error', message: 'The `scheduled_at` field is not supported yet.' };
     const { fetchMock, meow } = setup(json(422, e));
-    const res = await meow.emails.send({ ...payload, attachments: [] } as never);
+    const res = await meow.emails.send({ ...payload, scheduled_at: '2026-12-01T00:00:00Z' } as never);
     expect(res).toMatchObject({ data: null, error: e });
-    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toHaveProperty('attachments');
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toHaveProperty('scheduled_at');
   });
   it('turns a non-JSON error body into application_error', async () => {
     const { meow } = setup(new Response('<html>bad gateway</html>', { status: 400 }));

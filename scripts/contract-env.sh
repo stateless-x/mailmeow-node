@@ -61,7 +61,9 @@ wait_for redis 30 docker exec "$REDIS_NAME" redis-cli ping
 # An array, not a function, so `"${CLEAN[@]}" cmd &` gives $! of the program itself (env execs it).
 CLEAN=(env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}"
   DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL"
-  MAILMEOW_EMAIL_PROVIDER=fake RATE_LIMIT_PER_SECOND=100 SEND_RATE_PER_SECOND=100)
+  MAILMEOW_EMAIL_PROVIDER=fake RATE_LIMIT_PER_SECOND=100 SEND_RATE_PER_SECOND=100
+  # The webhook test's receiver is a local http:// server; the API refuses private webhook URLs unless both are set.
+  APP_ENV=development WEBHOOK_ALLOW_PRIVATE=true)
 
 (cd "$BE" && "${CLEAN[@]}" go run ./cmd/migrate >"$STATE/migrate.log" 2>&1) || { cat "$STATE/migrate.log" >&2; exit 1; }
 (cd "$BE" && for c in api worker mmctl; do "${CLEAN[@]}" go build -o "$STATE/bin/$c" "./cmd/$c"; done)

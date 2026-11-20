@@ -60,7 +60,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AttachmentInfo: {
+            content_type: string;
+            filename: string;
+            /**
+             * Format: int64
+             * @description Size in bytes.
+             */
+            size: number;
+        };
         Email: {
+            /** @description The files sent with the email, in the order sent. Empty when there are none. Only name, type and size: the file content is deleted once the email is sent. */
+            attachments: components["schemas"]["AttachmentInfo"][] | null;
             bcc: string[] | null;
             cc: string[] | null;
             created_at: string;
@@ -167,8 +178,17 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Not supported yet. Sending `attachments` returns 422 validation_error. */
-                    attachments?: unknown;
+                    /** @description Up to 10 MB of files in total. Files of types email providers block (.exe, .bat, .js and similar) return 422. */
+                    attachments?: {
+                        /** @description The file as base64. */
+                        content: string;
+                        /** @description Up to 128 characters. Makes the file inline for `<img src="cid:...">`. */
+                        content_id?: string;
+                        /** @description From the file extension when missing. */
+                        content_type?: string;
+                        /** @description Up to 255 bytes, no `/` or `\`. */
+                        filename: string;
+                    }[];
                     /** @description One address or a list. */
                     bcc?: string | string[];
                     /** @description One address or a list. */

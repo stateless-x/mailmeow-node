@@ -44,7 +44,7 @@ Throws `WebhookVerificationError` when the signature is wrong or older than 5 mi
 +const resend = new MailMeow(process.env.MAILMEOW_API_KEY);
 ```
 
-Or keep the `resend` package: set `RESEND_BASE_URL=https://api.mailmeow.dev` and use a mailmeow key. `attachments`, `scheduled_at`, `template` and `topic_id` are not supported yet and return `422 validation_error`.
+Or keep the `resend` package: set `RESEND_BASE_URL=https://api.mailmeow.dev` and use a mailmeow key. `scheduled_at`, `template` and `topic_id` are not supported yet and return `422 validation_error`. Attachments work with `content` (base64, up to 10 MB and 20 files per email); `path` is not supported yet.
 
 ## Develop
 

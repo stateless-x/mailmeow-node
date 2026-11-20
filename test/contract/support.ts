@@ -99,7 +99,7 @@ export async function receiver(): Promise<{ url: string; received: Received[]; c
 /** `mmctl webhook add` against the contract database only. Returns the whsec_ secret. */
 export function addWebhook(url: string, events: string): string {
   const out = execFileSync(stack.mmctl, ['webhook', 'add', '--org', stack.orgId, '--url', url, '--events', events], {
-    env: { PATH: process.env.PATH ?? '', DATABASE_URL: stack.databaseUrl, MAILMEOW_EMAIL_PROVIDER: 'fake' },
+    env: { PATH: process.env.PATH ?? '', DATABASE_URL: stack.databaseUrl, MAILMEOW_EMAIL_PROVIDER: 'fake', APP_ENV: 'development', WEBHOOK_ALLOW_PRIVATE: 'true' },
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });

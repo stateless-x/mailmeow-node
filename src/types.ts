@@ -31,6 +31,18 @@ export interface SendEmailOptions {
   replyTo?: string | string[];
   headers?: Record<string, string>;
   tags?: Tag[];
+  /** Up to 20 files, 10 MB in total. Same shape as the Resend SDK, except `path` (a URL) is not supported yet. */
+  attachments?: Attachment[];
+}
+
+export interface Attachment {
+  filename: string;
+  /** The file: a base64 string, or bytes (`Buffer`, `Uint8Array`, `ArrayBuffer`), which are sent as base64. */
+  content: string | Uint8Array | ArrayBuffer;
+  /** Default: from the file extension. */
+  contentType?: string;
+  /** Makes the file inline: use it in the HTML as `<img src="cid:...">`. */
+  contentId?: string;
 }
 
 export interface RequestOptions {

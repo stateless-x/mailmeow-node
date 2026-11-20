@@ -78,12 +78,28 @@ describe.each(sdks)('%s package against the API', (name, make) => {
     expect(page.data!.data.filter((e) => e.subject === subject)).toHaveLength(1);
   });
 
+  it('sends a PDF attachment and lists it on the email, without content', async () => {
+    const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n');
+    // Both clients take a Buffer and send it as base64, as the Resend SDK does.
+    const sent = await sdk.send({ ...payload(unique('pdf')), attachments: [{ filename: 'invoice.pdf', content: pdf }] });
+    expect(sent.error).toBeNull();
+    expect(sent.data?.id).toMatch(UUID);
+    const got = await sdk.get(sent.data!.id);
+    expect(got.error).toBeNull();
+    expect(got.data!.attachments).toEqual([{ filename: 'invoice.pdf', content_type: 'application/pdf', size: pdf.length }]);
+  });
+
+  it('an email without files has attachments: []', async () => {
+    const sent = await sdk.send(payload(unique('nofile')));
+    expect((await sdk.get(sent.data!.id)).data!.attachments).toEqual([]);
+  });
+
   if (name === 'resend') {
-    it('an unsupported field (attachments) is a 422 validation_error naming it', async () => {
-      const res = await sdk.send({ ...payload(unique('att')), attachments: [{ filename: 'a.txt', content: 'aGk=' }] });
+    it('an unsupported field (scheduledAt) is a 422 validation_error naming it', async () => {
+      const res = await sdk.send({ ...payload(unique('sched')), scheduledAt: '2026-12-01T00:00:00Z' });
       expect(res.data).toBeNull();
       expect(res.error).toMatchObject({ name: 'validation_error', statusCode: 422 });
-      expect(res.error!.message).toContain('attachments');
+      expect(res.error!.message).toContain('scheduled_at');
     });
 
     it('reads RESEND_BASE_URL and RESEND_API_KEY from the environment', async () => {
